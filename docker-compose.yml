@@ -1,0 +1,166 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.5
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  api-gateway:
+    build: ./services/api-gateway
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    depends_on:
+      - postgres
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+
+  image-harvest:
+    build: ./services/image-harvest
+    environment:
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      - rabbitmq
+
+  image-enhance:
+    build: ./services/image-enhance
+    environment:
+      - ENABLE_GPU=${ENABLE_GPU:-false}
+    depends_on:
+      - rabbitmq
+
+  gis-extract:
+    build: ./services/gis-extract
+    environment:
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      - postgres
+
+  video-generator:
+    build: ./services/video-generator
+    environment:
+      - ENABLE_GPU=${ENABLE_GPU:-false}
+    depends_on:
+      - rabbitmq
+      - minio
+
+  video-qa-service:
+    build: ./services/video-qa-service
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - rabbitmq
+
+  prompt-optimizer:
+    build: ./services/prompt-optimizer
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - redis
+
+  video-assembler:
+    build: ./services/video-assembler
+    environment:
+      - ENABLE_GPU=${ENABLE_GPU:-false}
+    depends_on:
+      - minio
+
+  storage-service:
+    build: ./services/storage-service
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    depends_on:
+      - minio
+      - postgres
+
+  multimodal-orchestrator:
+    build: ./services/multimodal-orchestrator
+    environment:
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+      - redis
+
+  job-scheduler:
+    build: ./services/job-scheduler
+    environment:
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+      - redis
+
+  client-ui:
+    build: ./services/client-ui
+    ports:
+      - "${CLIENT_UI_PORT:-3000}:80"
+    environment:
+      - API_URL=http://api-gateway:8000
+
+  backoffice-ui:
+    build: ./services/backoffice-ui
+    ports:
+      - "${BACKOFFICE_UI_PORT:-3001}:80"
+    environment:
+      - API_URL=http://api-gateway:8000
+
+  video-viewer:
+    build: ./services/video-viewer
+    ports:
+      - "${VIDEO_VIEWER_PORT:-3002}:80"
+    environment:
+      - API_URL=http://api-gateway:8000
+
+  postgres:
+    image: postgres:13-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:6-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data: 
