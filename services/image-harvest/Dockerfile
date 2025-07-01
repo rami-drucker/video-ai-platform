@@ -14,7 +14,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    libheif-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Create directory for storing images
+RUN mkdir -p /app/images/raw
 
 # Install Python dependencies
 COPY requirements.txt .

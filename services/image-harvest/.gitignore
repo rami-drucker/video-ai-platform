@@ -1,0 +1,29 @@
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Output and temporary files
+output/
+*.heic
+*.jpg
+*.jpeg
+*.png
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db 
