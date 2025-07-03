@@ -6,7 +6,17 @@ An AI-powered video generation platform that creates interactive video experienc
 
 The platform consists of several microservices:
 
-- `image-harvest`: Extracts street-view panorama images
+### Core Services
+
+#### [`image-harvest`](services/image-harvest/README.md)
+A critical service that fetches high-quality panoramic street images from various providers:
+- Supports Apple Look Around (primary) and Google Street View (planned)
+- Handles single locations (coordinates/addresses) and multi-point routes
+- Platform-optimized image processing with HEIC decoding
+- Detailed metadata including precise heading and positioning
+- [View detailed documentation](services/image-harvest/README.md)
+
+#### Other Services
 - `image-enhance`: Pre-processes and enhances raw images
 - `gis-extract`: Obtains location metadata and GIS data
 - `video-generator`: Generates video clips using Gen-3/DynamiCrafter
