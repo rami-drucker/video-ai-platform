@@ -1,0 +1,9 @@
+[submodule "external/lookaround-map"]
+	path = external/lookaround-map
+	url = https://github.com/sk-zk/lookaround-map.git
+[submodule "external/photo-sphere-viewer"]
+	path = external/photo-sphere-viewer
+	url = https://github.com/mistic100/Photo-Sphere-Viewer.git
+[submodule "external/streetlevel"]
+	path = external/streetlevel
+	url = https://github.com/sk-zk/streetlevel.git
