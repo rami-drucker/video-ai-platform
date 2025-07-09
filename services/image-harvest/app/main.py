@@ -168,9 +168,15 @@ def download_lookaround_panorama(coord: Coordinate) -> tuple[str, dict]:
         # Find panoramas near the coordinate
         try:
             # Get the coverage tile to find panoramas
+            logger.info(f"Searching for panoramas at coordinates: ({coord.lat}, {coord.lng})")
             coverage = lookaround.get_coverage_tile_by_latlon(coord.lat, coord.lng)
+            logger.info(f"Coverage response: {coverage}")
+            
             if not coverage or not coverage.panos:
+                logger.error("No coverage tile found or no panoramas in tile")
                 raise Exception("No panoramas found at this location")
+            
+            logger.info(f"Found {len(coverage.panos)} panoramas in coverage tile")
             
             # Find the closest panorama within 50 meters
             MAX_DISTANCE = 50  # meters

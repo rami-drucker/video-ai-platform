@@ -15,7 +15,7 @@ prometheus-client>=0.14.1
 streetlevel>=0.12.3
 pillow>=10.0.0
 pillow-heif>=0.15.0  # Primary HEIC decoder, works on all platforms
-pyheif>=0.7.0        # Faster alternative for Linux/Mac
+pyheif>=0.7.0; sys_platform != "win32"  # Optional: Faster alternative for Linux/Mac
 geocoder>=1.38.1
 pytest>=7.0.0        # For testing
 httpx>=0.24.0        # For async HTTP requests 
