@@ -22,6 +22,9 @@ import math  # Add at the top with other imports
 from streetlevel import lookaround
 from streetlevel.lookaround import Face, Authenticator
 
+# Import reverse_geocode function from geocoding module
+from .core.geocoding import reverse_geocode
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -282,6 +285,8 @@ async def harvest_images(location: LocationRequest):
         # Process address
         elif location.address:
             coord = geocode_address(location.address)
+            # Call here Apple reverse_geocode function in geocoding.py to obtain the actual address
+            reverse_geocode(coord.lat, coord.lng, display_language=["en-US"])
             file_path, meta = download_lookaround_panorama(coord)
             file_paths.append(file_path)
             metadata[file_path] = meta
