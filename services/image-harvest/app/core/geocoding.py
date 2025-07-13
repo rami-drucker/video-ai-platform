@@ -2,8 +2,11 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict
 import logging
 from requests import Session
+import requests  # ADD THIS IMPORT
+import io  # ADD THIS IMPORT
+import struct
 
-from streetlevel.lookaround import Authenticator
+# Remove this line: from streetlevel.lookaround import Authenticator
 from ..proto import PlaceRequest_pb2, PlaceResponse_pb2, Shared_pb2
 from ..proto.PlaceRequest_pb2 import PlaceRequest
 from ..proto.Shared_pb2 import RequestType, MapsResultType
@@ -21,6 +24,101 @@ class ValidationWarning:
     input_address: str
     found_address: str
     message: str
+
+# Add the ticket system (copied from lookaround-map viewer)
+@dataclass
+class TicketRequestHeader:
+    version_maybe: int = 1
+    locale: str = "en"
+    app_identifier: str = "com.apple.geod"
+    os_version: str = "11.7.5.20G1225"
+    unknown: int = 60
+
+# Add these classes after the existing dataclasses
+@dataclass
+class TicketResponseHeader:
+    version_maybe: int
+    unknown: int
+
+@dataclass
+class TicketResponse:
+    header: TicketResponseHeader
+    payload: bytes
+
+# Add BinaryReader class after BinaryWriter
+class BinaryReader:
+    def __init__(self, base_stream: io.BytesIO):
+        self.bs = base_stream
+
+    def read(self, size: int) -> bytes:
+        return self.bs.read(size)
+
+    def read_uint2_be(self) -> int:
+        return int.from_bytes(self.bs.read(2), byteorder="big", signed=False)
+
+    def read_uint4_be(self) -> int:
+        return int.from_bytes(self.bs.read(4), byteorder="big", signed=False)
+
+
+class BinaryWriter:
+    def __init__(self, base_stream: io.BytesIO):
+        self.bs = base_stream
+
+    @property
+    def content(self) -> bytes:
+        return self.bs.getvalue()
+
+    def write(self, b: bytes):
+        self.bs.write(b)
+
+    def write_uint2_be(self, n: int):
+        self.bs.write(struct.pack(">H", n))
+
+    def write_uint4_be(self, n: int):
+        self.bs.write(struct.pack(">I", n))
+
+def _write_pascal_string_be(writer: BinaryWriter, value: str, encoding: str = "utf-8") -> None:
+    value_bytes = value.encode(encoding)
+    writer.write_uint2_be(len(value_bytes))
+    writer.write(value_bytes)
+
+def serialize_ticket_request(header: TicketRequestHeader, payload: bytes) -> bytes:
+    w = BinaryWriter(io.BytesIO())
+    w.write_uint2_be(header.version_maybe)
+    _write_pascal_string_be(w, header.locale)
+    _write_pascal_string_be(w, header.app_identifier)
+    _write_pascal_string_be(w, header.os_version)
+    w.write_uint4_be(header.unknown)
+    w.write_uint4_be(len(payload))
+    w.write(payload)
+    return w.content
+
+# Add this function after serialize_ticket_request
+def deserialize_ticket_response(response: bytes) -> TicketResponse:
+    """
+    Deserializes a ticket response.
+    """
+    r = BinaryReader(io.BytesIO(response))
+    header = TicketResponseHeader(
+        version_maybe=r.read_uint2_be(),
+        unknown=r.read_uint4_be()
+    )
+    length = r.read_uint4_be()
+    payload = r.read(length)
+    return TicketResponse(header=header, payload=payload)
+
+# Update the make_ticket_request function
+def make_ticket_request(payload: bytes, session: Session = None) -> bytes:
+    """
+    Makes a request against dispatcher.arpc with the given payload.
+    """
+    header = TicketRequestHeader()
+    request_body = serialize_ticket_request(header, payload)
+    requester = session if session else requests
+    http_response = requester.post("https://gsp-ssl.ls.apple.com/dispatcher.arpc", data=request_body)
+    # Change this line to properly deserialize the response
+    response_ticket = deserialize_ticket_response(http_response.content)
+    return response_ticket.payload  # Return the payload, not the raw content
 
 def _build_pb_request(lat: float, lng: float, display_languages: List[str]) -> PlaceRequest:  # Changed from lon to lng
     """Build protobuf request for reverse geocoding."""
@@ -54,9 +152,10 @@ def reverse_geocode(lat: float, lng: float, display_language: List[str], session
         Dictionary containing address components
     """
     try:
-        auth = Authenticator()  # Use the same authenticator as for panoramas
+        # Remove this line: auth = Authenticator()  # Use the same authenticator as for panoramas
         pb_request = _build_pb_request(lat, lng, display_language)  # Changed from lon to lng
-        pb_response = auth.make_ticket_request(pb_request.SerializeToString(), session)
+         # Change this line: pb_response = auth.make_ticket_request(pb_request.SerializeToString(), session)
+        pb_response = make_ticket_request(pb_request.SerializeToString(), session)
         response = PlaceResponse_pb2.PlaceResponse()
         response.ParseFromString(pb_response)
         address = response.maps_result.place.component[0].value[0].address_object.address_object.place.address

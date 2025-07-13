@@ -4,7 +4,7 @@ Image Harvest Service - Extracts street-view panorama images based on geographic
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List, Union, Dict
-import sys
+#import sysl
 import platform
 from PIL import Image
 import logging
@@ -18,12 +18,12 @@ import requests
 import time
 import math  # Add at the top with other imports
 
-# Import streetlevel modules correctly
+# Import validate_coordinates function from geocoding module FIRST (loads our protobuf files)
+#from .core.geocoding import validate_coordinates
+
+# Import streetlevel modules AFTER our protobuf files are loaded
 from streetlevel import lookaround
 from streetlevel.lookaround import Face, Authenticator
-
-# Import reverse_geocode function from geocoding module
-from .core.geocoding import reverse_geocode
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -285,8 +285,15 @@ async def harvest_images(location: LocationRequest):
         # Process address
         elif location.address:
             coord = geocode_address(location.address)
-            # Call here Apple reverse_geocode function in geocoding.py to obtain the actual address
-            reverse_geocode(coord.lat, coord.lng, display_language=["en-US"])
+            # Call here validate_coordinates which calls Apple reverse_geocode function in geocoding.py to obtain the actual address
+            #validation_result = validate_coordinates(coord, location.address)
+            #if validation_result:
+            #   meta["validation_warning"] = {
+            #   "message": validation_result.message,
+            #   "input_address": validation_result.input_address,
+            #   "found_address": validation_result.found_address
+            #   }
+
             file_path, meta = download_lookaround_panorama(coord)
             file_paths.append(file_path)
             metadata[file_path] = meta
