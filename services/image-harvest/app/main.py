@@ -25,6 +25,11 @@ import math  # Add at the top with other imports
 from streetlevel import lookaround
 from streetlevel.lookaround import Face, Authenticator
 
+# Import new adaptive search modules
+from app.core.boundary_analysis import calculate_boundary_distances, determine_search_strategy, select_adaptive_tiles
+from app.core.panorama_discovery import fetch_adaptive_tiles, aggregate_panoramas, rank_panoramas_by_distance
+from app.config import MAX_DISTANCE
+from app.core.utils import calculate_distance
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -140,64 +145,48 @@ def geocode_address(address: str) -> Coordinate:
         logger.error(f"Geocoding error: {str(e)}")
         raise HTTPException(status_code=400, detail="Could not geocode address")
 
-def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """
-    Calculate distance between two points in meters using the Haversine formula.
-    """
-    R = 6371000  # Earth's radius in meters
-    
-    # Convert to radians
-    lat1_rad = math.radians(lat1)
-    lon1_rad = math.radians(lon1)
-    lat2_rad = math.radians(lat2)
-    lon2_rad = math.radians(lon2)
-    
-    # Differences
-    dlat = lat2_rad - lat1_rad
-    dlon = lon2_rad - lon1_rad
-    
-    # Haversine formula
-    a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    
-    return R * c
-
 def download_lookaround_panorama(coord: Coordinate) -> tuple[str, dict]:
     """
     Download Apple Look Around panorama for a given coordinate and convert from HEIC to JPG.
     Returns tuple of (file_path, metadata)
     """
     try:
-        # Find panoramas near the coordinate
+        # Find panoramas near the coordinate using adaptive boundary-based search
         try:
-            # Get the coverage tile to find panoramas
             logger.info(f"Searching for panoramas at coordinates: ({coord.lat}, {coord.lng})")
-            coverage = lookaround.get_coverage_tile_by_latlon(coord.lat, coord.lng)
-            logger.info(f"Coverage response: {coverage}")
             
-            if not coverage or not coverage.panos:
-                logger.error("No coverage tile found or no panoramas in tile")
+            # Calculate boundary distances and determine search strategy
+            boundary_distances = calculate_boundary_distances(coord.lat, coord.lng)
+            search_strategy = determine_search_strategy(boundary_distances)
+            selected_tiles = select_adaptive_tiles(search_strategy, boundary_distances)
+            
+            logger.info(f"Boundary analysis: {boundary_distances}")
+            logger.info(f"Search strategy: {search_strategy}")
+            logger.info(f"Selected tiles: {selected_tiles}")
+            
+            # Fetch panoramas from selected tiles
+            coverage_tiles = fetch_adaptive_tiles(selected_tiles)
+            if not coverage_tiles:
+                logger.error("No coverage tiles found")
+                raise Exception("No coverage tiles found at this location")
+            
+            # Aggregate panoramas from all tiles
+            all_panoramas = aggregate_panoramas(coverage_tiles)
+            if not all_panoramas:
+                logger.error("No panoramas found in selected tiles")
                 raise Exception("No panoramas found at this location")
             
-            logger.info(f"Found {len(coverage.panos)} panoramas in coverage tile")
+            logger.info(f"Found {len(all_panoramas)} panoramas across {len(selected_tiles)} tiles")
             
-            # Find the closest panorama within 50 meters
-            MAX_DISTANCE = 50  # meters
-            closest_pano = None
-            min_distance = float('inf')
+            # Rank panoramas by distance and select the best one
+            ranked_panoramas = rank_panoramas_by_distance(all_panoramas, coord, MAX_DISTANCE)
             
-            for pano in coverage.panos:
-                distance = calculate_distance(coord.lat, coord.lng, pano.lat, pano.lon)
-                logger.info(f"Found panorama at ({pano.lat}, {pano.lon}), distance: {distance:.2f}m")
-                
-                if distance < min_distance and distance <= MAX_DISTANCE:
-                    min_distance = distance
-                    closest_pano = pano
-            
-            if not closest_pano:
+            if not ranked_panoramas:
                 raise Exception(f"No panoramas found within {MAX_DISTANCE} meters of the location")
             
-            pano = closest_pano
+            pano = ranked_panoramas[0]  # Best panorama (closest within distance limit)
+            min_distance = calculate_distance(coord.lat, coord.lng, pano.lat, pano.lon)
+            
             logger.info(f"Selected panorama at ({pano.lat}, {pano.lon}), distance: {min_distance:.2f}m")
                 
         except Exception as e:

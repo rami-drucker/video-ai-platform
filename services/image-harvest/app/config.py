@@ -13,6 +13,11 @@ NOMINATIM_RATE_LIMIT = 1  # Rate limit in seconds for Nominatim API
 # Location settings
 MAX_DISTANCE = 50  # Maximum distance in meters to search for panoramas
 
+# Adaptive boundary-based search settings
+BOUNDARY_CENTER_THRESHOLD = 75  # meters - threshold for center-only search
+BOUNDARY_ADJACENT_THRESHOLD = 50  # meters - threshold for including adjacent tiles
+MAX_ADAPTIVE_TILES = 5  # maximum tiles to search in adaptive mode
+
 # Output settings
 OUTPUT_DIR = "output"  # Directory for storing downloaded images
 
