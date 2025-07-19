@@ -22,4 +22,15 @@ MAX_ADAPTIVE_TILES = 5  # maximum tiles to search in adaptive mode
 OUTPUT_DIR = "output"  # Directory for storing downloaded images
 
 # Image settings
-FACE_ZOOM_LEVEL = 2  # Zoom level for panorama faces (0-4, higher is more detailed) 
+FACE_ZOOM_LEVEL = 2  # Zoom level for panorama faces (0-4, higher is more detailed)
+
+# Route-specific settings
+ROUTE_HEADING_SECTOR_DEGREES = 45
+ROUTE_MAX_PANORAMAS = 50
+ROUTE_PROXIMITY_THRESHOLD = 100  # meters
+ROUTE_CONFIDENCE_THRESHOLD = 4   # points
+
+# Logging settings
+LOG_LEVEL = "INFO"
+LOG_DIR = "logs"
+LOG_SESSION_FORMAT = "image_harvest_{timestamp}.txt"  # .txt suffix 

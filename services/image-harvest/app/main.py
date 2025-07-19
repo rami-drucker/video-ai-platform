@@ -29,10 +29,36 @@ from streetlevel.lookaround import Face, Authenticator
 from app.core.boundary_analysis import calculate_boundary_distances, determine_search_strategy, select_adaptive_tiles
 from app.core.panorama_discovery import fetch_adaptive_tiles, aggregate_panoramas, rank_panoramas_by_distance
 from app.config import MAX_DISTANCE
+from app.config import (
+    ROUTE_HEADING_SECTOR_DEGREES, 
+    ROUTE_MAX_PANORAMAS, 
+    ROUTE_PROXIMITY_THRESHOLD, 
+    ROUTE_CONFIDENCE_THRESHOLD
+)
 from app.core.utils import calculate_distance
+from app.route_processor import process_route_request
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Setup session-specific file logging
+from pathlib import Path
+from datetime import datetime
+from app.config import LOG_DIR, LOG_SESSION_FORMAT
+
+# Create session-specific log file
+session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_file = Path(LOG_DIR) / LOG_SESSION_FORMAT.format(timestamp=session_timestamp)
+
+# Configure file handler with same format as terminal
+file_handler = logging.FileHandler(log_file)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(message)s'))  # Same as terminal
+
+# Add file handler to root logger
+logging.getLogger().addHandler(file_handler)
+
+logger.info(f"Session started - Log file: {log_file}")
 
 # Set up HEIC decoder
 try:
@@ -61,20 +87,7 @@ IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 # Initialize the authenticator
 auth = Authenticator()
 
-class Coordinate(BaseModel):
-    """Model for geographic coordinates."""
-    lat: float = Field(..., description="Latitude")
-    lng: float = Field(..., description="Longitude")
-
-class LocationRequest(BaseModel):
-    """Request model for location-based image harvesting."""
-    coordinates: Optional[Coordinate] = Field(None, description="Latitude and longitude coordinates")
-    address: Optional[str] = Field(None, description="Street address to geocode")
-
-class ImageResponse(BaseModel):
-    """Response model for harvested images."""
-    file_paths: List[str]
-    metadata: Dict[str, dict]
+from app.models import Coordinate, LocationRequest, ImageResponse, RouteRequest, RouteResponse
 
 def decode_heic_image(heic_data: bytes) -> Image.Image:
     """
@@ -297,6 +310,28 @@ async def harvest_images(location: LocationRequest):
         
     except Exception as e:
         logger.error(f"Error harvesting images: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/harvest/route", response_model=RouteResponse)
+async def harvest_route_images(route: RouteRequest):
+    """
+    Harvest street-view panorama images along a route between two addresses.
+    """
+    try:
+        logger.info(f"Route request received: {route.start_address} to {route.end_address}")
+        
+        # Use route processor with function references
+        file_paths, metadata = process_route_request(
+            route.start_address, 
+            route.end_address,
+            geocode_address,
+            download_lookaround_panorama
+        )
+        
+        return RouteResponse(file_paths=file_paths, metadata=metadata)
+        
+    except Exception as e:
+        logger.error(f"Error harvesting route images: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
