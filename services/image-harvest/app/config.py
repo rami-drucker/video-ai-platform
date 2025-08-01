@@ -25,7 +25,7 @@ OUTPUT_DIR = "output"  # Directory for storing downloaded images
 FACE_ZOOM_LEVEL = 2  # Zoom level for panorama faces (0-4, higher is more detailed)
 
 # Route-specific settings
-ROUTE_HEADING_SECTOR_DEGREES = 45
+ROUTE_HEADING_SECTOR_DEGREES = 60
 ROUTE_MAX_PANORAMAS = 50
 ROUTE_PROXIMITY_THRESHOLD = 100  # meters
 ROUTE_CONFIDENCE_THRESHOLD = 4   # points

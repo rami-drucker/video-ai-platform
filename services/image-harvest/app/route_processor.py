@@ -15,7 +15,19 @@ def apply_street_heuristics_func(candidates: list, start_street: str, current_he
         if current_heading is not None:
             heading_sector = config.get("ROUTE_HEADING_SECTOR_DEGREES", 60)
             
+            # Calculate current distance to destination for progression check
+            current_to_end = calculate_distance(current_head_coord.lat, current_head_coord.lng, end_coord.lat, end_coord.lng)
+            logger.info(f"Current distance to destination: {current_to_end:.2f}m")
+            
             for pano in candidates:  # Already sorted by distance (closest first)
+                # PROGRESSION CHECK: Ensure candidate moves toward destination
+                candidate_to_end = calculate_distance(pano.lat, pano.lon, end_coord.lat, end_coord.lng)
+                
+                if candidate_to_end >= current_to_end:
+                    logger.info(f"Rejected {pano.id}: No progress toward destination ({candidate_to_end:.2f}m vs {current_to_end:.2f}m)")
+                    continue  # Skip candidates that don't progress toward destination
+                
+                # HEADING CHECK: Only check heading for candidates that progress toward destination
                 if hasattr(pano, 'heading'):
                     # Convert pano.heading from radians to degrees for comparison
                     # Apply same coordinate system conversion as in main.py
@@ -25,16 +37,18 @@ def apply_street_heuristics_func(candidates: list, start_street: str, current_he
                     
                     if heading_diff <= heading_sector:
                         logger.info(f"EARLY TERMINATION: Found perfect match - {pano.id} at distance {calculate_distance(current_head_coord.lat, current_head_coord.lng, pano.lat, pano.lon):.1f}m")
+                        logger.info(f"Progression: {candidate_to_end:.2f}m vs {current_to_end:.2f}m (closer to destination)")
                         logger.info(f"Heading aligned: {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
                         return [pano]  # Return single candidate for immediate selection
                     else:
-                        logger.info(f"Rejected {pano.id}: {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
+                        logger.info(f"Rejected {pano.id}: Heading misaligned {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
                 else:
-                    # If no heading info, include the candidate
+                    # If no heading info, include the candidate (but still check progression)
                     logger.info(f"EARLY TERMINATION: Found candidate without heading info - {pano.id}")
+                    logger.info(f"Progression: {candidate_to_end:.2f}m vs {current_to_end:.2f}m (closer to destination)")
                     return [pano]  # Return single candidate for immediate selection
             
-            logger.info("No candidates passed heading alignment - will use fallback scoring")
+            logger.info("No candidates passed progression + heading alignment - will use fallback scoring")
             return []  # No early match found, fallback to current scoring
         else:
             logger.info("No current heading available - will use fallback scoring")
