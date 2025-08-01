@@ -11,34 +11,43 @@ def apply_street_heuristics_func(candidates: list, start_street: str, current_he
         from app.core.utils import calculate_distance
         import math
         
-        # Filter candidates based on heading alignment if heading is available
+        # OPTIMIZATION: Early termination - find first candidate that meets all criteria
         if current_heading is not None:
-            heading_sector = config.get("ROUTE_HEADING_SECTOR_DEGREES", 45)
-            aligned_candidates = []
+            heading_sector = config.get("ROUTE_HEADING_SECTOR_DEGREES", 60)
             
-            for pano in candidates:
+            for pano in candidates:  # Already sorted by distance (closest first)
                 if hasattr(pano, 'heading'):
                     # Convert pano.heading from radians to degrees for comparison
-                    pano_heading_degrees = math.degrees(pano.heading) % 360
+                    # Apply same coordinate system conversion as in main.py
+                    heading_degrees_ccw = math.degrees(pano.heading) % 360  # Counter-clockwise
+                    pano_heading_degrees = (360 - heading_degrees_ccw) % 360  # Convert to clockwise
                     heading_diff = abs((pano_heading_degrees - current_heading + 180) % 360 - 180)
                     
                     if heading_diff <= heading_sector:
-                        aligned_candidates.append(pano)
-                        logger.info(f"Candidate {pano.id} aligned with heading: {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
+                        logger.info(f"EARLY TERMINATION: Found perfect match - {pano.id} at distance {calculate_distance(current_head_coord.lat, current_head_coord.lng, pano.lat, pano.lon):.1f}m")
+                        logger.info(f"Heading aligned: {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
+                        return [pano]  # Return single candidate for immediate selection
                     else:
-                        logger.info(f"Candidate {pano.id} rejected: {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
+                        logger.info(f"Rejected {pano.id}: {pano_heading_degrees:.1f}° vs {current_heading:.1f}° (diff: {heading_diff:.1f}°)")
                 else:
                     # If no heading info, include the candidate
-                    aligned_candidates.append(pano)
-                    logger.info(f"Candidate {pano.id} included (no heading info)")
+                    logger.info(f"EARLY TERMINATION: Found candidate without heading info - {pano.id}")
+                    return [pano]  # Return single candidate for immediate selection
             
-            candidates = aligned_candidates
-            logger.info(f"After heading alignment: {len(candidates)} candidates remain")
+            logger.info("No candidates passed heading alignment - will use fallback scoring")
+            return []  # No early match found, fallback to current scoring
+        else:
+            logger.info("No current heading available - will use fallback scoring")
+            return candidates  # Return all candidates for fallback scoring
         
-        # Apply additional street heuristics
-        filtered = apply_street_heuristics(candidates, start_street, current_head_coord, end_coord)
-        logger.info(f"Applied street heuristics, {len(filtered)} candidates remain.")
-        return filtered
+        # FALLBACK: Apply additional street heuristics if no early termination
+        if candidates:  # Only apply if we have candidates from early termination
+            filtered = apply_street_heuristics(candidates, start_street, current_head_coord, end_coord)
+            logger.info(f"FALLBACK: Applied street heuristics, {len(filtered)} candidates remain.")
+            return filtered
+        else:
+            logger.info("FALLBACK: No candidates from early termination, returning empty list")
+            return []
     except Exception as e:
         logger.error(f"Error in apply_street_heuristics_func: {str(e)}")
         return candidates
@@ -69,7 +78,7 @@ def select_next_panorama_func(filtered_candidates: list, current_coord: Coordina
                 score += 1
             # Progression toward end
             if dist_to_end < calculate_distance(current_coord.lat, current_coord.lng, end_coord.lat, end_coord.lng):
-                score += 2
+                    score += 2
             scored.append((score, pano, dist_to_end))
         if not scored:
             logger.info("No scored candidates.")
@@ -87,7 +96,7 @@ def select_next_panorama_func(filtered_candidates: list, current_coord: Coordina
         api_calls = ambiguity_state.get("api_calls", 0)
         skips = ambiguity_state.get("skips", 0)
         try:
-            from app.street_heuristics import extract_street_name
+            from app.core.utils import normalize_address
             import requests
             for pano in top_candidates:
                 # Reverse geocode pano location
@@ -97,7 +106,7 @@ def select_next_panorama_func(filtered_candidates: list, current_coord: Coordina
                 if resp.status_code == 200:
                     data = resp.json()
                     street = data.get("address", {}).get("road", "")
-                    if street and (extract_street_name(street) == extract_street_name(start_street)):
+                    if street and normalize_address(street) == normalize_address(start_street):
                         logger.info(f"Selected panorama after Nominatim check: {street}")
                         ambiguity_state["api_calls"] = api_calls
                         ambiguity_state["skips"] = skips
@@ -170,11 +179,16 @@ def find_nearby_panoramas_func(current_coord: Coordinate, search_radius: float, 
                 logger.info(f"Found candidate: {pano_id} at distance {distance:.2f}m")
         
         logger.info(f"Found {len(candidates)} unvisited candidates within {search_radius}m")
+        
+        # OPTIMIZATION: Sort candidates by distance (closest first)
+        candidates.sort(key=lambda pano: calculate_distance(current_coord.lat, current_coord.lng, pano.lat, pano.lon))
+        logger.info(f"Sorted {len(candidates)} candidates by distance (closest first)")
+        
         return candidates
         
     except Exception as e:
         logger.error(f"Error in find_nearby_panoramas_func: {str(e)}")
-        return []
+    return []
 
 def should_terminate_route(current_coord: Coordinate, end_coord: Coordinate, pano_count: int, ambiguity_skips: int, config: dict) -> bool:
     """
@@ -345,7 +359,7 @@ def progress_along_route(
             "route_completed": False,
             "error": str(e)
         }
-        return file_paths, metadata_dict, summary
+    return file_paths, metadata_dict, summary
 
 def process_route_request(start_address, end_address, geocode_func, download_func):
     """

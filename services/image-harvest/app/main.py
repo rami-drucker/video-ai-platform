@@ -4,7 +4,7 @@ Image Harvest Service - Extracts street-view panorama images based on geographic
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List, Union, Dict
-#import sysl
+import sys
 import platform
 from PIL import Image
 import logging
@@ -73,7 +73,7 @@ except ImportError:
         logger.info("Using pyheif for HEIC decoding")
     except ImportError:
         try:
-            from heic2rgb import decode_heic
+            from heic2rgb import decode_heic  # type: ignore
             HEIC_DECODER = 'heic2rgb'
             logger.info("Using heic2rgb for HEIC decoding")
         except ImportError:

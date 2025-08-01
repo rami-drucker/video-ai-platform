@@ -27,3 +27,42 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     
     return R * c
+
+def normalize_address(address: str) -> str:
+    """
+    Normalize address string for comparison by removing common differences.
+    
+    Args:
+        address: Address string to normalize
+        
+    Returns:
+        Normalized address string
+    """
+    # Convert to lowercase
+    normalized = address.lower()
+    
+    # Remove common abbreviations
+    replacements = {
+        'avenue': 'ave',
+        'street': 'st',
+        'road': 'rd',
+        'boulevard': 'blvd',
+        'drive': 'dr',
+        'lane': 'ln',
+        'court': 'ct',
+        'circle': 'cir',
+        'highway': 'hwy',
+        'parkway': 'pkwy',
+    }
+    
+    for full, abbr in replacements.items():
+        normalized = normalized.replace(full, abbr)
+        normalized = normalized.replace(f"{abbr}.", abbr)
+    
+    # Remove punctuation except commas (needed for address parts)
+    normalized = ''.join(c for c in normalized if c.isalnum() or c.isspace() or c == ',')
+    
+    # Remove extra whitespace
+    normalized = ' '.join(normalized.split())
+    
+    return normalized

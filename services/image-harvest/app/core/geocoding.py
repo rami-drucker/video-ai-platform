@@ -171,44 +171,7 @@ def reverse_geocode(lat: float, lng: float, display_language: List[str], session
         logger.error(f"Error in reverse geocoding: {str(e)}")
         return None
 
-def normalize_address(address: str) -> str:
-    """
-    Normalize address string for comparison by removing common differences.
-    
-    Args:
-        address: Address string to normalize
-        
-    Returns:
-        Normalized address string
-    """
-    # Convert to lowercase
-    normalized = address.lower()
-    
-    # Remove common abbreviations
-    replacements = {
-        'avenue': 'ave',
-        'street': 'st',
-        'road': 'rd',
-        'boulevard': 'blvd',
-        'drive': 'dr',
-        'lane': 'ln',
-        'court': 'ct',
-        'circle': 'cir',
-        'highway': 'hwy',
-        'parkway': 'pkwy',
-    }
-    
-    for full, abbr in replacements.items():
-        normalized = normalized.replace(full, abbr)
-        normalized = normalized.replace(f"{abbr}.", abbr)
-    
-    # Remove punctuation except commas (needed for address parts)
-    normalized = ''.join(c for c in normalized if c.isalnum() or c.isspace() or c == ',')
-    
-    # Remove extra whitespace
-    normalized = ' '.join(normalized.split())
-    
-    return normalized
+from .utils import normalize_address
 
 def validate_coordinates(coord: Coordinate, original_address: str) -> Optional[ValidationWarning]:
     """
