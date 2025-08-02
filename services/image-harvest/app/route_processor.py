@@ -211,7 +211,7 @@ def should_terminate_route(current_coord: Coordinate, end_coord: Coordinate, pan
     """
     try:
         from app.core.utils import calculate_distance
-        proximity_threshold = config.get("ROUTE_PROGRESSION_THRESHOLD", 30)
+        proximity_threshold = config.get("ROUTE_PROGRESSION_THRESHOLD", 10)
         max_panos = config.get("ROUTE_MAX_PANORAMAS", 50)
         max_skips = config.get("ROUTE_MAX_AMBIGUOUS_SKIPS", 2)
         dist_to_end = calculate_distance(current_coord.lat, current_coord.lng, end_coord.lat, end_coord.lng)
@@ -238,7 +238,16 @@ def progress_along_route(
         metadata_dict: Dict mapping file paths to panorama metadata.
         summary: Dict with route summary (distance, panos, API calls, etc.)
     """
+    import hashlib
+    from datetime import datetime
+    
     logger.info(f"Starting progress_along_route from ({start_coord.lat}, {start_coord.lng}) to ({end_coord.lat}, {end_coord.lng})")
+    
+    # Generate session ID for route processing
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    route_hash = hashlib.md5(f"{start_coord.lat}_{start_coord.lng}_{end_coord.lat}_{end_coord.lng}".encode()).hexdigest()[:6]
+    session_id = f"{timestamp}_{route_hash}"
+    logger.info(f"Generated session ID: {session_id}")
     
     # Initialize state
     file_paths = []
@@ -255,7 +264,7 @@ def progress_along_route(
     try:
         # Download and store the first panorama
         logger.info("Downloading initial panorama at start location")
-        file_path, metadata = download_func(start_coord)
+        file_path, metadata = download_func(start_coord, session_id)
         file_paths.append(file_path)
         metadata_dict[file_path] = metadata
         
@@ -316,7 +325,7 @@ def progress_along_route(
             # Download the selected panorama
             try:
                 pano_coord = Coordinate(lat=next_pano.lat, lng=next_pano.lon)
-                file_path, metadata = download_func(pano_coord)
+                file_path, metadata = download_func(pano_coord, session_id)
                 file_paths.append(file_path)
                 metadata_dict[file_path] = metadata
                 
@@ -391,6 +400,7 @@ def process_route_request(start_address, end_address, geocode_func, download_fun
         logger.info(f"End coordinates: ({end_coord.lat}, {end_coord.lng})")
         start_street = extract_street_name(start_address)
         logger.info(f"Extracted street name: {start_street}")
+        
         # Prepare config dict
         from app.config import (
             ROUTE_HEADING_SECTOR_DEGREES,

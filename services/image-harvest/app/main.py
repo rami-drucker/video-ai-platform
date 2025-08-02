@@ -158,9 +158,10 @@ def geocode_address(address: str) -> Coordinate:
         logger.error(f"Geocoding error: {str(e)}")
         raise HTTPException(status_code=400, detail="Could not geocode address")
 
-def download_lookaround_panorama(coord: Coordinate) -> tuple[str, dict]:
+def download_lookaround_panorama(coord: Coordinate, session_id: str = None) -> tuple[str, dict]:
     """
     Download Apple Look Around panorama for a given coordinate and convert from HEIC to JPG.
+    Downloads all 6 faces (BACK, LEFT, FRONT, RIGHT, TOP, BOTTOM) and returns FRONT face path.
     Returns tuple of (file_path, metadata)
     """
     try:
@@ -208,24 +209,31 @@ def download_lookaround_panorama(coord: Coordinate) -> tuple[str, dict]:
 
         # Download the panorama
         try:
-            # Create output directory if it doesn't exist
-            output_dir = "output"
+            # Simple session support
+            if session_id:
+                output_dir = os.path.join("output", session_id)
+            else:
+                output_dir = "output"
             os.makedirs(output_dir, exist_ok=True)
             
             # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            heic_path = os.path.join(output_dir, f"pano_{timestamp}.heic")
-            jpg_path = os.path.join(output_dir, f"pano_{timestamp}.jpg")
             
-            # Download and save panorama face
-            lookaround.download_panorama_face(pano, heic_path, Face.FRONT, 0, auth)
+            # Download all 6 faces following streetlevel pattern
+            for face_idx in range(6):
+                heic_path = os.path.join(output_dir, f"pano_{timestamp}_{face_idx}.heic")
+                jpg_path = os.path.join(output_dir, f"pano_{timestamp}_{face_idx}.jpg")
+                
+                # Download face using streetlevel pattern
+                lookaround.download_panorama_face(pano, heic_path, face_idx, 0, auth)
+                
+                # Convert HEIC to JPG
+                img = Image.open(heic_path)
+                img.save(jpg_path, "JPEG")
+                os.remove(heic_path)
             
-            # Convert HEIC to JPG using pillow-heif
-            img = Image.open(heic_path)
-            img.save(jpg_path, "JPEG")
-            
-            # Clean up HEIC file
-            os.remove(heic_path)
+            # Return front face path for backward compatibility (face_idx=2 is FRONT)
+            front_jpg_path = os.path.join(output_dir, f"pano_{timestamp}_2.jpg")
             
             # Return the JPG path and metadata
             # Convert heading from counter-clockwise (where 90° is West) to clockwise (where 90° is East)
@@ -248,7 +256,7 @@ def download_lookaround_panorama(coord: Coordinate) -> tuple[str, dict]:
                 "distance_meters": min_distance
             }
             
-            return jpg_path, metadata
+            return front_jpg_path, metadata
             
         except Exception as e:
             logger.error(f"Error downloading/converting panorama: {str(e)}")
